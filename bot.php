@@ -5,6 +5,7 @@ http_response_code(200);
 
 require_once __DIR__ . '/bot.config.php';
 require_once __DIR__ . '/inc/sheets.php';
+require_once __DIR__ . '/inc/ui_texts.php';
 
 function starts_with($h, $n){ return $n === '' || strpos($h, $n) === 0; }
 
@@ -356,7 +357,7 @@ if ($cb) {
   $chatId = $cb['message']['chat']['id'] ?? 0;
   $data = $cb['data'] ?? '';
   if (!$chatId) exit;
-  if (!is_admin($fromId)) { answer_cb($cb['id'], 'Нет доступа'); exit; }
+  if (!is_admin($fromId)) { answer_cb($cb['id'], ui_text('access_denied')); exit; }
 
   try {
     if (starts_with($data,'cat:')) {
@@ -577,30 +578,30 @@ if ($msg) {
   $chatId = $msg['chat']['id'] ?? 0;
   $fromId = $msg['from']['id'] ?? 0;
   if (!$chatId) exit;
-  if (!is_admin($fromId)) { send($chatId, "Нет доступа."); exit; }
+  if (!is_admin($fromId)) { send($chatId, ui_text('access_denied')); exit; }
 
   $text = trim((string)($msg['text'] ?? ''));
   $st = load_state($chatId);
 
   if ($text === '/start') {
-    send($chatId, "Ок. Админ-бот каталога.\nВыбери действие:", main_menu());
+    send($chatId, ui_text('start'), main_menu());
     exit;
   }
 
   if ($text === '🧹 Сбросить черновик' || $text === '/reset') {
     clear_state($chatId);
-    send($chatId, "Черновик очищен.", main_menu());
+    send($chatId, ui_text('draft_cleared'), main_menu());
     exit;
   }
 
   if ($text === '➕ Добавить товар' || $text === '/add') {
     clear_state($chatId);
-    send($chatId, "Выбери категорию:", categories_kb());
+    send($chatId, ui_text('choose_category'), categories_kb());
     exit;
   }
 
   if ($text === '📦 Товары' || $text === '/catalog') {
-    send($chatId, "Что показываем?", [
+    send($chatId, ui_text('choose_catalog'), [
       'inline_keyboard'=>[
         [['text'=>'💎 Ювелирные', 'callback_data'=>'list:jewelry:0']],
         [['text'=>'👜 Сумки', 'callback_data'=>'list:bags:0'], ['text'=>'⌚ Часы', 'callback_data'=>'list:watches:0']],
@@ -612,7 +613,7 @@ if ($msg) {
 
   if ($text === '/cancel') {
     clear_state($chatId);
-    send($chatId, "Ок, отменил.", main_menu());
+    send($chatId, ui_text('cancelled'), main_menu());
     exit;
   }
 
@@ -632,17 +633,17 @@ if ($msg) {
 
       $st['photos'] = $st['photos'] ?? [];
       if (count($st['photos']) >= 4) {
-        send($chatId, "Фото уже 4/4. Если нужно заново — /reset.");
+        send($chatId, ui_text('photo_limit'));
         exit;
       }
       $st['photos'][] = $url;
       save_state($chatId, $st);
 
-      send($chatId, "Фото загружено ✅\nТекущее: ".count($st['photos'])."/4\nКогда готов — <b>/publish</b>.");
+      send($chatId, ui_text('photo_uploaded', ['count'=>count($st['photos'])]));
       exit;
 
     } catch (Throwable $e) {
-      send($chatId, "Ошибка загрузки фото: " . htmlspecialchars($e->getMessage()));
+      send($chatId, ui_text('upload_error', ['error'=>htmlspecialchars($e->getMessage())]));
       exit;
     }
   }
@@ -696,11 +697,11 @@ if ($msg) {
       sheets_update_cell($sheet, "M{$rowNum}", $p[3]);
 
       clear_state($chatId);
-      send($chatId, "✅ Добавлено: <b>{$id}</b>\nЛист: {$sheet}\nСтрока: {$rowNum}", main_menu());
+      send($chatId, ui_text('added_success', ['id'=>$id, 'sheet'=>$sheet, 'row'=>$rowNum]), main_menu());
       exit;
 
     } catch (Throwable $e) {
-      send($chatId, "Ошибка публикации: " . htmlspecialchars($e->getMessage()));
+      send($chatId, ui_text('publish_error', ['error'=>htmlspecialchars($e->getMessage())]));
       exit;
     }
   }
@@ -709,7 +710,7 @@ if ($msg) {
   if (($st['mode'] ?? '') === 'add') {
     // если ювелирка и не выбрана папка фото — просим
     if (($st['category'] ?? '') === 'jewelry' && empty($st['sub'])) {
-      send($chatId, "Сначала выбери папку для фото:", jewelry_sub_kb());
+      send($chatId, ui_text('select_photo_folder'), jewelry_sub_kb());
       exit;
     }
 
@@ -719,14 +720,14 @@ if ($msg) {
 
     while ($i < count($schema) && $schema[$i]['type'] === 'photo') $i++;
     if ($i >= count($schema)) {
-      send($chatId, "Теперь отправь фото (1–4) и /publish.");
+      send($chatId, ui_text('send_photos_then_publish'));
       exit;
     }
 
     $key = $schema[$i]['k'];
 
     // если мы в edit-режиме — не сюда
-    if (($st['mode'] ?? '') !== 'add') { send($chatId, "Не тот режим. /start"); exit; }
+    if (($st['mode'] ?? '') !== 'add') { send($chatId, ui_text('not_mode')); exit; }
 
     set_value_next($chatId, $st, $key, $text);
     exit;
@@ -754,18 +755,18 @@ if ($msg) {
       sheets_update_cell($sheet, cell_a1($col, $rowNum), $text);
 
       clear_state($chatId);
-      send($chatId, "✅ Сохранено.", ['inline_keyboard'=>[
+      send($chatId, ui_text('saved'), ['inline_keyboard'=>[
         [['text'=>'⬅️ Назад к полям','callback_data'=>"edit:{$category}:{$id}:{$page}"]],
         [['text'=>'Открыть товар','callback_data'=>"item:{$category}:{$id}:0"]],
       ]]);
       exit;
 
     } catch (Throwable $e) {
-      send($chatId, "Ошибка редактирования: " . htmlspecialchars($e->getMessage()));
+      send($chatId, ui_text('edit_error', ['error'=>htmlspecialchars($e->getMessage())]));
       exit;
     }
   }
 
-  send($chatId, "Команды:\n/add — добавить\n/catalog — товары\n/reset — сброс\n/publish — опубликовать\n/cancel — отмена", main_menu());
+  send($chatId, ui_text('commands'), main_menu());
   exit;
 }
